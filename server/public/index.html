@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>소비 관리</title>
+<!-- iOS 홈 화면 추가 시 전체화면 웹앱 (주소창 없음) + 커스텀 아이콘 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="소비">
+<meta name="theme-color" content="#0f1117">
+<link rel="apple-touch-icon" href="/icon-full.png">
+<!-- 북마크바/탭 파비콘 -->
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<style>
+  :root { --bg:#0f1117; --card:#1a1d27; --card2:#222634; --line:#2a2e3a; --txt:#e6e8ee; --sub:#9aa0ad; --accent:#5b8cff; --in:#5fd28a; --out:#ff6b81; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  /* iOS: input 폰트 16px 이상이면 focus 시 자동 줌 안 함 */
+  input, select, textarea { font-size:16px; }
+  body { margin:0; background:var(--bg); color:var(--txt); font-family:'Apple SD Gothic Neo',-apple-system,sans-serif; font-size:14px; }
+  .app { display:flex; min-height:100vh; }
+
+  /* 사이드바 */
+  aside { width:170px; flex:0 0 170px; background:#12141c; border-right:1px solid var(--line); padding:14px 10px; overflow-y:auto; }
+  aside h2 { font-size:13px; color:var(--sub); margin:0 0 10px 4px; letter-spacing:.5px; }
+  .yr { margin-bottom:4px; }
+  .yr-h { padding:7px 9px; border-radius:8px; cursor:pointer; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+  .yr-h:hover { background:var(--card); }
+  .yr-h .tot { font-size:11px; color:var(--out); font-weight:500; }
+  .months { margin:2px 0 6px 6px; }
+  .mo { padding:6px 10px; border-radius:7px; cursor:pointer; font-size:13px; display:flex; justify-content:space-between; align-items:center; color:var(--sub); }
+  .mo:hover { background:var(--card); color:var(--txt); }
+  .mo.active { background:var(--accent); color:#fff; }
+  .mo .ms { font-size:11px; opacity:.8; }
+
+  /* 메인 */
+  main { flex:1; padding:16px 18px 40px; min-width:0; }
+  .top { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+  .top h1 { margin:0; font-size:20px; }
+  .sum { display:flex; gap:8px; flex-wrap:wrap; }
+  .chip { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:6px 11px; font-size:11px; color:var(--sub); }
+  .chip b { display:block; font-size:14px; margin-top:2px; }
+
+  /* 달력 */
+  .cal { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .dow { text-align:center; font-size:11px; color:var(--sub); padding:2px 0; }
+  .dow.sun { color:var(--out); } .dow.sat { color:var(--accent); }
+  .cell { background:var(--card); border:1px solid var(--line); border-radius:9px; height:68px; padding:5px 6px; cursor:pointer; display:flex; flex-direction:column; gap:2px; overflow:hidden; }
+  .cell.empty { background:transparent; border:none; cursor:default; }
+  .cell:not(.empty):hover { border-color:var(--accent); }
+  .cell.sel { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .cell.today .dnum { color:var(--accent); font-weight:700; }
+  .cell.has { background:#1e2230; }
+  .dnum { font-size:12px; color:var(--sub); flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; }
+  .cnt { font-size:10px; color:var(--sub); background:#2a2f3d; border-radius:7px; padding:0 5px; line-height:15px; }
+  .cell .o { font-size:13px; color:var(--out); font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cell .i { font-size:11px; color:var(--in); line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* 일자 상세 */
+  .day { margin-top:18px; }
+  .day h3 { font-size:15px; margin:0 0 10px; }
+  .tx { background:var(--card); border:1px solid var(--line); border-radius:11px; padding:10px 12px; margin-bottom:8px; }
+  .tx-top { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .merchant { font-weight:600; }
+  .amount { font-weight:700; white-space:nowrap; }
+  .amount.out { color:var(--out); } .amount.in { color:var(--in); }
+  .meta { color:var(--sub); font-size:12px; margin-top:3px; display:flex; gap:8px; flex-wrap:wrap; }
+  .tag { background:var(--card2); border-radius:6px; padding:1px 7px; }
+  .edit { display:flex; gap:7px; margin-top:8px; }
+  .edit input, .edit select { flex:1; min-width:0; background:var(--card2); color:var(--txt); border:1px solid var(--line); border-radius:7px; padding:7px 9px; font-size:16px; }
+  .edit select { appearance:none; -webkit-appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%239aa0ad' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 9px center; padding-right:24px; }
+  .edit select:invalid { color:var(--sub); }
+  .edit .cat { flex:0 0 40%; }
+  .saved { color:var(--in); font-size:11px; align-self:center; opacity:0; transition:.2s; }
+  .saved.show { opacity:1; }
+  .amount .orig { color:var(--sub); font-size:12px; font-weight:500; text-decoration:line-through; margin-left:6px; }
+  .settle { margin-top:11px; padding-top:11px; border-top:1px solid var(--line); }
+  .settle-head { display:flex; justify-content:space-between; align-items:center; }
+  .settle-label { font-size:13px; color:var(--sub); }
+  .tx.is-settled .settle-label { color:var(--accent); font-weight:600; }
+  .switch { position:relative; display:inline-block; width:46px; height:27px; flex:0 0 auto; }
+  .switch input { opacity:0; width:0; height:0; position:absolute; }
+  .slider { position:absolute; cursor:pointer; inset:0; background:#363b49; border-radius:27px; transition:.22s; }
+  .slider:before { content:''; position:absolute; height:21px; width:21px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.22s; box-shadow:0 1px 2px rgba(0,0,0,.4); }
+  .switch input:checked + .slider { background:var(--accent); }
+  .switch input:checked + .slider:before { transform:translateX(19px); }
+  .my-wrap { display:flex; gap:8px; margin-top:10px; }
+  .settle .my-amt { flex:1; min-width:0; background:var(--card2); color:var(--txt); border:1px solid var(--accent); border-radius:8px; padding:9px 11px; font-size:16px; }
+  .my-ok { flex:0 0 auto; background:var(--accent); color:#fff; border:none; border-radius:8px; padding:0 18px; font-size:15px; font-weight:600; cursor:pointer; }
+  .my-ok:active { opacity:.8; }
+  .tx.is-settled { border-color:#3a4668; background:#191d2b; }
+  .badge { background:var(--accent); color:#fff; font-size:10px; border-radius:5px; padding:1px 6px; margin-left:6px; vertical-align:middle; }
+  .badge.ex { background:#6b7280; }
+  .hint { color:var(--sub); font-size:13px; padding:8px 2px; }
+  /* 카테고리 관리 */
+  .cat-btn { background:var(--card); border:1px solid var(--line); color:var(--sub); border-radius:10px; padding:7px 12px; font-size:12px; cursor:pointer; }
+  .cat-btn:hover { border-color:var(--accent); color:var(--txt); }
+  .icon-btn { padding:7px 11px; font-size:15px; line-height:1; }
+  .icon-btn.spinning { animation:spin .7s linear infinite; }
+  /* 당겨서 새로고침 인디케이터 */
+  #ptr { position:fixed; top:0; left:0; right:0; display:flex; justify-content:center; pointer-events:none; z-index:60; transform:translateY(-48px); opacity:0; }
+  #ptr.show { opacity:1; }
+  #ptr .spin { margin-top:10px; width:32px; height:32px; border-radius:50%; background:var(--card); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; color:var(--accent); font-size:17px; box-shadow:0 3px 10px rgba(0,0,0,.4); }
+  #ptr.ready .spin { border-color:var(--accent); }
+  #ptr.spinning .spin { animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .cat-panel { background:var(--card); border:1px solid var(--line); border-radius:11px; padding:12px; margin-bottom:14px; }
+  .cat-chips { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px; }
+  .cat-chip { display:inline-flex; align-items:center; gap:6px; background:var(--card2); border:1px solid var(--line); border-radius:8px; padding:5px 8px 5px 11px; font-size:13px; }
+  .cat-chip .del { cursor:pointer; color:var(--sub); font-size:16px; line-height:1; width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; border-radius:5px; }
+  .cat-chip .del:hover { background:var(--out); color:#fff; }
+  .cat-add { display:flex; gap:8px; }
+  .cat-add input { flex:1; min-width:0; background:var(--card2); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px 11px; font-size:16px; }
+  .cat-add button { flex:0 0 auto; background:var(--accent); color:#fff; border:none; border-radius:8px; padding:0 16px; font-size:14px; font-weight:600; cursor:pointer; }
+  .cat-add button:active { opacity:.8; }
+  /* 통계 제외 토글 */
+  .excl { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .excl-label { font-size:13px; color:var(--sub); }
+  .switch.sm { width:40px; height:23px; }
+  .switch.sm .slider:before { height:17px; width:17px; }
+  .switch.sm input:checked + .slider:before { transform:translateX(17px); }
+  .switch.sm input:checked + .slider { background:#6b7280; }
+  .tx.is-excluded .tx-top, .tx.is-excluded .meta, .tx.is-excluded .settle, .tx.is-excluded .edit { opacity:.5; }
+  .tx.is-excluded .amount { text-decoration:line-through; }
+  /* 일자 거래 필터 칩 */
+  .fchips { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+  .fchip { background:var(--card); border:1px solid var(--line); color:var(--sub); border-radius:9px; padding:6px 11px; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .fchip .fn { font-size:11px; opacity:.7; background:var(--card2); border-radius:6px; padding:0 6px; min-width:16px; text-align:center; }
+  .fchip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .fchip.on .fn { background:rgba(255,255,255,.25); opacity:1; }
+  .fchip.off { opacity:.38; cursor:default; }
+
+  @media (max-width:680px){
+    .app { flex-direction:column; }
+    aside { width:auto; flex:none; border-right:none; border-bottom:1px solid var(--line); display:flex; gap:8px; overflow-x:auto; padding:10px; }
+    aside h2 { display:none; }
+    .yr { margin:0; } .months { display:flex; gap:6px; margin:0; }
+    .yr-h, .mo { white-space:nowrap; gap:10px; }
+    main { padding:12px 12px 40px; }
+    .cal { gap:4px; }
+    .cell { height:62px; padding:4px 5px; border-radius:8px; gap:1px; }
+    .cell .o { font-size:12px; }
+    .cell .i { font-size:10px; }
+    .cnt { font-size:9px; padding:0 4px; }
+    .stat-grid { grid-template-columns:1fr !important; gap:16px !important; }
+    .donut { width:200px !important; height:200px !important; }
+  }
+
+  /* ===== 분석 뷰 ===== */
+  .tabbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .tabs { display:inline-flex; gap:3px; background:var(--card); border:1px solid var(--line); border-radius:11px; padding:3px; }
+  .tab { padding:7px 18px; border:none; background:none; color:var(--sub); border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; transition:.18s; font-family:inherit; }
+  .tab.on { background:var(--accent); color:#fff; box-shadow:0 1px 6px rgba(91,140,255,.35); }
+  .periods { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:20px; }
+  .pchip { background:var(--card); border:1px solid var(--line); color:var(--sub); border-radius:9px; padding:7px 13px; font-size:13px; cursor:pointer; transition:.15s; font-family:inherit; }
+  .pchip:hover { border-color:var(--accent); }
+  .pchip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  .stat-grid { display:grid; grid-template-columns:minmax(0,240px) 1fr; gap:28px; align-items:center; }
+  .stat-grid > * { min-width:0; }
+  .donut-card { display:flex; justify-content:center; }
+  .donut { position:relative; width:230px; height:230px; }
+  .donut svg { width:100%; height:100%; transform:rotate(-90deg); }
+  .donut .ring { fill:none; cursor:pointer; transition:stroke-width .2s, opacity .2s; }
+  .donut .ring.dim { opacity:.25; }
+  .donut .ring.hi { stroke-width:28 !important; }
+  .donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; pointer-events:none; }
+  .donut-center .dc-label { font-size:12px; color:var(--sub); letter-spacing:.5px; }
+  .donut-center .dc-total { font-size:23px; font-weight:800; margin-top:3px; letter-spacing:-.5px; }
+  .donut-center .dc-sub { font-size:11px; color:var(--sub); margin-top:5px; }
+
+  .legend { display:flex; flex-direction:column; }
+  .leg { display:flex; align-items:center; gap:11px; padding:10px 9px; border-radius:9px; cursor:pointer; transition:.15s; }
+  .leg:hover { background:var(--card); }
+  .leg.dim { opacity:.35; }
+  .leg-dot { width:11px; height:11px; border-radius:3px; flex:0 0 auto; }
+  .leg-name { font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .leg-pct { font-size:11px; color:var(--sub); background:var(--card2); border-radius:6px; padding:1px 7px; flex:0 0 auto; }
+  .leg-amt { font-weight:700; white-space:nowrap; }
+  .leg-amt .delta { font-size:11px; font-weight:700; margin-left:7px; }
+  .delta.up { color:var(--out); } .delta.down { color:var(--in); } .delta.flat { color:var(--sub); }
+
+  .stat-sec-h { font-size:13px; color:var(--sub); margin:28px 0 8px; font-weight:700; letter-spacing:.3px; }
+  .rank { display:flex; align-items:center; gap:11px; padding:10px 2px; border-bottom:1px solid var(--line); }
+  .rank:last-child { border-bottom:none; }
+  .rank-no { font-size:12px; color:var(--accent); font-weight:800; width:16px; flex:0 0 auto; }
+  .rank-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:500; }
+  .rank-bar { flex:0 0 70px; height:6px; background:var(--card2); border-radius:3px; overflow:hidden; }
+  .rank-bar i { display:block; height:100%; background:linear-gradient(90deg,var(--accent),#7aa2ff); border-radius:3px; }
+  .rank-amt { font-weight:700; white-space:nowrap; font-size:13px; flex:0 0 auto; }
+
+  .stat-empty { color:var(--sub); padding:48px 0; text-align:center; }
+  .drill { margin-top:22px; }
+  .drill h3 { font-size:15px; margin:0 0 12px; display:flex; align-items:center; gap:8px; }
+  .drill h3 .close { margin-left:auto; font-size:12px; color:var(--sub); cursor:pointer; background:var(--card); border:1px solid var(--line); border-radius:7px; padding:5px 11px; font-weight:500; }
+  .drill h3 .close:hover { border-color:var(--accent); color:var(--txt); }
+
+  /* 카테고리 관리: 행 + 고정/비정기/변동 세그먼트 토글 */
+  .cat-list { display:flex; flex-direction:column; gap:8px; margin-bottom:13px; }
+  .cat-row { display:flex; align-items:center; gap:10px; }
+  .cat-rname { flex:1; min-width:0; font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .seg { display:inline-flex; background:var(--card2); border:1px solid var(--line); border-radius:8px; padding:2px; flex:0 0 auto; }
+  .seg-b { border:none; background:none; color:var(--sub); font-size:11px; font-weight:700; padding:5px 9px; border-radius:6px; cursor:pointer; font-family:inherit; white-space:nowrap; transition:.15s; }
+  .seg-b.on.fixed { background:#5b8cff; color:#fff; }
+  .seg-b.on.irregular { background:#ffb454; color:#1a1d27; }
+  .seg-b.on.variable { background:#5fd28a; color:#1a1d27; }
+  .cat-row .del { cursor:pointer; color:var(--sub); font-size:18px; line-height:1; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; flex:0 0 auto; }
+  .cat-row .del:hover { background:var(--out); color:#fff; }
+
+  /* 분석: 고정/비정기/변동 그룹 막대 */
+  .gbar-wrap { margin-bottom:24px; }
+  .gbar { display:flex; height:14px; border-radius:7px; overflow:hidden; background:var(--card2); }
+  .gseg { height:100%; transition:width .3s; }
+  .gseg.fixed { background:#5b8cff; } .gseg.irregular { background:#ffb454; } .gseg.variable { background:#5fd28a; }
+  .gleg { display:flex; flex-wrap:wrap; gap:7px 16px; margin-top:11px; }
+  .gleg-i { font-size:12px; color:var(--sub); display:inline-flex; align-items:center; gap:6px; }
+  .gleg-i b { color:var(--txt); font-weight:700; }
+  .gleg-i .gpct { color:var(--sub); }
+  .gdot { width:9px; height:9px; border-radius:3px; display:inline-block; flex:0 0 auto; }
+  .gdot.fixed { background:#5b8cff; } .gdot.irregular { background:#ffb454; } .gdot.variable { background:#5fd28a; }
+</style>
+</head>
+<body>
+<div id="ptr"><div class="spin">↻</div></div>
+<div class="app">
+  <aside><h2>기간</h2><div id="nav"></div></aside>
+  <main>
+    <div class="tabbar">
+      <div class="tabs">
+        <button type="button" class="tab on" data-v="cal">달력</button>
+        <button type="button" class="tab" data-v="stat">분석</button>
+      </div>
+      <button type="button" id="refreshBtn" class="cat-btn icon-btn" title="새로고침" aria-label="새로고침">↻</button>
+    </div>
+    <div id="calView">
+      <div class="top">
+        <h1 id="title">—</h1>
+        <div class="sum" id="sum"></div>
+        <button type="button" id="catBtn" class="cat-btn">카테고리 관리</button>
+      </div>
+      <div id="catPanel" class="cat-panel" style="display:none"></div>
+      <div class="cal" id="cal"></div>
+      <div class="day" id="day"></div>
+    </div>
+    <div id="statView" style="display:none">
+      <div class="top">
+        <h1 id="statTitle">—</h1>
+        <div class="sum" id="statSum"></div>
+      </div>
+      <div class="periods" id="periods"></div>
+      <div id="statBody"></div>
+    </div>
+  </main>
+</div>
+<script>
+const WON = n => n==null ? '-' : Number(n).toLocaleString('ko-KR')+'원';
+// 달력 셀용 축약 (셀 크기 고정 위해 한 줄로): 8천 / 1.3만 / 123만 / 2.7억
+const SHORT = n => {
+  if(n==null||n===0) return '';
+  if(n>=1e8){ const v=n/1e8; return (v>=10?Math.round(v):v.toFixed(1).replace(/\.0$/,''))+'억'; }
+  if(n>=1e4){ const m=n/1e4; return (m>=100?Math.round(m):m.toFixed(1).replace(/\.0$/,''))+'만'; }
+  if(n>=1e3) return (n/1e3).toFixed(0)+'천';
+  return Number(n).toLocaleString('ko-KR');
+};
+const DOW = ['일','월','화','수','목','금','토'];
+let CATS = [], CATGRP = {};
+let ALL = [], curY=null, curM=null, selDay=null, dayFilter='all';
+const GROUPS = [['fixed','고정'],['irregular','비정기'],['variable','변동']];
+
+const dkey = t => (t.occurred_at || t.received_at || '').slice(0,10).replace('T','-'); // YYYY-MM-DD
+const isSpend = t => ['승인','출금'].includes(t.type);
+// 통계 포함 여부: 사용자가 "통계 제외"한 거래(정산비 입금·계좌이체 등)는 모든 합계에서 뺀다
+const inStat = t => !t.excluded;
+// 통계 반영 금액: 정산된 거래는 "내 실제 소비액"만 반영, 아니면 원 결제액
+const eff = t => (t.settled && t.my_amount!=null) ? t.my_amount : (t.amount||0);
+
+async function loadCats(){
+  try{ const r=await fetch('/api/categories'); if(r.ok){ const j=await r.json(); CATS=j.categories||[]; CATGRP=j.groups||{}; } }catch(e){}
+}
+
+async function load(){
+  await loadCats();
+  const r = await fetch('/api/transactions?limit=2000');
+  if(!r.ok){ document.getElementById('cal').textContent='불러오기 실패'; return; }
+  ALL = (await r.json()).rows.filter(t=>dkey(t));
+  buildNav();
+  // 최신 월 자동 선택
+  const latest = ALL.map(dkey).sort().reverse()[0];
+  if(latest){ const [y,m]=latest.split('-'); select(+y,+m); }
+  else { document.getElementById('cal').innerHTML='<div class="hint">아직 거래가 없습니다.</div>'; }
+}
+
+function buildNav(){
+  // 연>월 그룹 + 월별 지출합
+  const map = {}; // y -> m -> spend
+  ALL.forEach(t=>{ const k=dkey(t); const y=+k.slice(0,4), m=+k.slice(5,7);
+    (map[y]=map[y]||{}); map[y][m]=(map[y][m]||0)+((inStat(t)&&isSpend(t))?eff(t):0); });
+  const nav = document.getElementById('nav'); nav.innerHTML='';
+  Object.keys(map).map(Number).sort((a,b)=>b-a).forEach(y=>{
+    const yTot = Object.values(map[y]).reduce((a,b)=>a+b,0);
+    const wrap=document.createElement('div'); wrap.className='yr';
+    const h=document.createElement('div'); h.className='yr-h';
+    h.innerHTML=`<span>${y}년</span><span class="tot">${WON(yTot)}</span>`;
+    const ms=document.createElement('div'); ms.className='months';
+    Object.keys(map[y]).map(Number).sort((a,b)=>b-a).forEach(m=>{
+      const el=document.createElement('div'); el.className='mo'; el.dataset.y=y; el.dataset.m=m;
+      el.innerHTML=`<span>${m}월</span><span class="ms">${WON(map[y][m])}</span>`;
+      el.onclick=()=>select(y,m); ms.appendChild(el);
+    });
+    h.onclick=()=>{ ms.style.display = ms.style.display==='none'?'':'none'; };
+    wrap.appendChild(h); wrap.appendChild(ms); nav.appendChild(wrap);
+  });
+}
+
+function select(y,m){
+  curY=y; curM=m; selDay=null;
+  document.querySelectorAll('.mo').forEach(e=>e.classList.toggle('active', +e.dataset.y===y && +e.dataset.m===m));
+  renderMonth();
+}
+
+function renderMonth(){
+  document.getElementById('title').textContent = `${curY}년 ${curM}월`;
+  const inMonth = ALL.filter(t=>{ const k=dkey(t); return +k.slice(0,4)===curY && +k.slice(5,7)===curM; });
+  const statRows = inMonth.filter(inStat);
+  const spend = statRows.filter(isSpend).reduce((a,t)=>a+eff(t),0);
+  const income = statRows.filter(t=>t.type==='입금').reduce((a,t)=>a+(t.amount||0),0);
+  document.getElementById('sum').innerHTML =
+    `<div class="chip">지출<b style="color:var(--out)">${WON(spend)}</b></div>
+     <div class="chip">수입<b style="color:var(--in)">${WON(income)}</b></div>
+     <div class="chip">건수<b>${inMonth.length}</b></div>`;
+  // 일별 집계
+  const byDay = {};
+  inMonth.forEach(t=>{ const d=+dkey(t).slice(8,10); (byDay[d]=byDay[d]||{s:0,i:0,n:0});
+    if(inStat(t)){ if(isSpend(t)) byDay[d].s+=eff(t); else if(t.type==='입금') byDay[d].i+=t.amount||0; } byDay[d].n++; });
+  const first = new Date(curY, curM-1, 1).getDay();
+  const days = new Date(curY, curM, 0).getDate();
+  const today = new Date(); const isThisMonth = today.getFullYear()===curY && today.getMonth()+1===curM;
+  let html = DOW.map((d,i)=>`<div class="dow ${i===0?'sun':i===6?'sat':''}">${d}</div>`).join('');
+  for(let i=0;i<first;i++) html+='<div class="cell empty"></div>';
+  for(let d=1; d<=days; d++){
+    const v=byDay[d]; const tdy = isThisMonth && today.getDate()===d;
+    html+=`<div class="cell${tdy?' today':''}${v?' has':''}" data-d="${d}">
+      <div class="dnum">${d}${v?`<span class="cnt">${v.n}</span>`:''}</div>
+      ${v&&v.s?`<div class="o">−${SHORT(v.s)}</div>`:''}
+      ${v&&v.i?`<div class="i">+${SHORT(v.i)}</div>`:''}
+    </div>`;
+  }
+  const cal=document.getElementById('cal'); cal.innerHTML=html;
+  cal.querySelectorAll('.cell[data-d]').forEach(c=>c.onclick=()=>{ dayFilter='all'; showDay(+c.dataset.d); });
+  document.getElementById('day').innerHTML = '<div class="hint">날짜를 누르면 그날 거래가 보입니다.</div>';
+}
+
+function showDay(d){
+  selDay=d;
+  document.querySelectorAll('.cell').forEach(c=>c.classList.toggle('sel', +c.dataset.d===d));
+  const ds = `${curY}-${String(curM).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const allRows = ALL.filter(t=>dkey(t)===ds).sort((a,b)=>(a.occurred_at||'').localeCompare(b.occurred_at||''));
+  const box=document.getElementById('day');
+  if(!allRows.length){ box.innerHTML=`<h3>${curM}월 ${d}일</h3><div class="hint">거래 없음</div>`; return; }
+  // 필터 칩 카운트 (지출/수입=방향, 미분류=통계 포함인데 카테고리 없음)
+  const cnt = { all:allRows.length, spend:allRows.filter(isSpend).length,
+    income:allRows.filter(t=>t.type==='입금').length, uncat:allRows.filter(t=>!t.category && !t.excluded).length };
+  if(dayFilter!=='all' && !cnt[dayFilter]) dayFilter='all'; // 선택 칩이 0건이면 전체로
+  const rows = allRows.filter(t=> dayFilter==='spend'?isSpend(t) : dayFilter==='income'?t.type==='입금'
+    : dayFilter==='uncat'?(!t.category && !t.excluded) : true);
+  const chips = [['all','전체'],['spend','지출'],['income','수입'],['uncat','미분류']]
+    .map(([k,label])=>`<button type="button" class="fchip${dayFilter===k?' on':''}${(!cnt[k]&&k!=='all')?' off':''}" data-f="${k}">${label} <span class="fn">${cnt[k]}</span></button>`).join('');
+  box.innerHTML = `<h3>${curM}월 ${d}일 · ${allRows.length}건</h3><div class="fchips">${chips}</div>` + rows.map(t=>{
+    const io = t.type==='입금'?'in':'out'; const sign=t.type==='입금'?'+':'−';
+    const settled = !!t.settled; const hasMy = settled && t.my_amount!=null;
+    const excluded = !!t.excluded;
+    const shown = hasMy ? t.my_amount : t.amount;
+    return `<div class="tx${settled?' is-settled':''}${excluded?' is-excluded':''}" data-id="${t.id}">
+      <div class="tx-top"><span class="merchant">${esc(t.merchant)||'(미상)'}${settled?'<span class="badge">정산</span>':''}${excluded?'<span class="badge ex">제외</span>':''}</span>
+        <span class="amount ${io}">${sign}${WON(shown)}${hasMy?`<span class="orig">${WON(t.amount)}</span>`:''}</span></div>
+      <div class="meta"><span class="tag">${t.source||'?'}</span><span>${t.type||''}</span>
+        <span>${(t.occurred_at||'').slice(11,16)}</span>${t.balance!=null?`<span>잔액 ${WON(t.balance)}</span>`:''}</div>
+      <div class="excl">
+        <span class="excl-label">통계 제외${excluded?' · 합계에 미반영':''}</span>
+        <label class="switch sm"><input type="checkbox" class="ex-chk" ${excluded?'checked':''}><span class="slider"></span></label>
+      </div>
+      <div class="settle">
+        <div class="settle-head">
+          <span class="settle-label">함께 쓴 돈 정산${hasMy?` · 내 몫 ${WON(t.my_amount)}`:''}</span>
+          <label class="switch"><input type="checkbox" class="set-chk" ${settled?'checked':''}><span class="slider"></span></label>
+        </div>
+        <div class="my-wrap" style="${settled?'':'display:none'}">
+          <input class="my-amt" type="text" inputmode="numeric" enterkeyhint="done" placeholder="내가 실제 낸 금액(원)" value="${hasMy?t.my_amount:''}">
+          <button type="button" class="my-ok">적용</button>
+        </div>
+      </div>
+      <div class="edit">
+        <select class="cat" data-f="category" required>
+          <option value="" ${!t.category?'selected':''} disabled hidden>카테고리</option>
+          ${(t.category && !CATS.includes(t.category) ? [t.category, ...CATS] : CATS)
+            .map(c=>`<option ${t.category===c?'selected':''}>${esc(c)}</option>`).join('')}
+        </select>
+        <input placeholder="메모" value="${esc(t.memo)}" data-f="memo">
+        <span class="saved">저장됨</span>
+      </div></div>`;
+  }).join('');
+  // 필터 칩 클릭 (단일 선택)
+  box.querySelectorAll('.fchip').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.f; if(k!=='all' && !cnt[k]) return; // 0건 칩은 무시
+    dayFilter=k; showDay(d);
+  });
+  box.querySelectorAll('.tx').forEach(el=>{
+    const id=el.dataset.id;
+    // 메모는 조용히 저장 / 카테고리는 미분류 칩·목록 갱신 위해 재렌더
+    el.querySelectorAll('.edit input, .edit select').forEach(inp=>inp.addEventListener('change',()=>
+      save(id,{[inp.dataset.f]:inp.value},el, inp.dataset.f==='category')));
+    // 통계 제외 토글: 저장 + 통계 재계산
+    const exc=el.querySelector('.ex-chk');
+    exc.addEventListener('change',()=>save(id,{excluded:exc.checked?1:0},el,true));
+    // 정산 체크: 토글 → my-amt 표시/숨김 + 저장 + 통계 재계산
+    const chk=el.querySelector('.set-chk'), wrap=el.querySelector('.my-wrap'),
+          my=el.querySelector('.my-amt'), ok=el.querySelector('.my-ok');
+    chk.addEventListener('change',async()=>{
+      wrap.style.display = chk.checked ? 'flex' : 'none';
+      await save(id,{settled:chk.checked?1:0},el,true);
+      if(chk.checked) my.focus();
+    });
+    // 숫자만 허용
+    my.addEventListener('input', ()=>{ const c=my.value.replace(/[^0-9]/g,''); if(c!==my.value) my.value=c; });
+    // 적용: "적용" 버튼 / Enter / 키보드 완료 / 포커스 아웃 — 모두 동일하게 저장
+    my.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); my.blur(); } });
+    my.addEventListener('change',()=>save(id,{my_amount:my.value===''?null:parseInt(my.value)},el,true));
+    ok.addEventListener('click', ()=>my.blur()); // blur → change → 저장
+  });
+}
+
+async function save(id, patch, el, recalc){
+  const r=await fetch('/api/transactions/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});
+  if(!r.ok) return;
+  const t=ALL.find(x=>x.id==id); if(t) Object.assign(t, patch);
+  if(recalc){ const sd=selDay; buildNav(); select(curY,curM); if(sd) showDay(sd); }
+  else { const s=el && el.querySelector('.saved'); if(s){ s.classList.add('show'); setTimeout(()=>s.classList.remove('show'),1200); } }
+}
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// --- 카테고리 관리 ---
+function renderCatPanel(){
+  const p=document.getElementById('catPanel');
+  p.innerHTML = `<div class="cat-list">${CATS.map(c=>{
+      const g=CATGRP[c]||'variable';
+      return `<div class="cat-row"><span class="cat-rname">${esc(c)}</span>
+        <span class="seg" data-c="${esc(c)}">${GROUPS.map(([k,l])=>
+          `<button type="button" class="seg-b ${g===k?'on '+k:''}" data-g="${k}">${l}</button>`).join('')}</span>
+        <span class="del" data-c="${esc(c)}">×</span></div>`;
+    }).join('')||'<span class="hint">카테고리가 없습니다.</span>'}</div>
+    <div class="cat-add"><input id="catNew" placeholder="새 카테고리 이름(변동으로 추가)" maxlength="20" enterkeyhint="done"><button type="button" id="catAdd">추가</button></div>`;
+  p.querySelectorAll('.del').forEach(x=>x.onclick=()=>delCat(x.dataset.c));
+  p.querySelectorAll('.seg-b').forEach(b=>b.onclick=()=>setGroup(b.closest('.seg').dataset.c, b.dataset.g));
+  const inp=p.querySelector('#catNew'), btn=p.querySelector('#catAdd');
+  btn.onclick=()=>addCat(inp.value);
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addCat(inp.value); } });
+}
+async function setGroup(name, grp){
+  if((CATGRP[name]||'variable')===grp) return;
+  const r=await fetch('/api/categories/'+encodeURIComponent(name),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({grp})});
+  if(!r.ok) return;
+  CATGRP[name]=grp; renderCatPanel();
+  if(viewMode==='stat') renderStat(); // 분석 보는 중이면 막대 즉시 갱신
+}
+async function addCat(name){
+  name=(name||'').trim(); if(!name) return;
+  const r=await fetch('/api/categories',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+  if(!r.ok) return;
+  await loadCats(); renderCatPanel(); if(selDay) showDay(selDay);
+}
+async function delCat(name){
+  if(!confirm(`'${name}' 카테고리를 목록에서 삭제할까요?\n(이미 이 카테고리로 분류된 거래는 값이 그대로 유지됩니다)`)) return;
+  const r=await fetch('/api/categories/'+encodeURIComponent(name),{method:'DELETE'});
+  if(!r.ok) return;
+  await loadCats(); renderCatPanel(); if(selDay) showDay(selDay);
+}
+document.getElementById('catBtn').onclick=()=>{
+  const p=document.getElementById('catPanel');
+  if(p.style.display==='none'){ renderCatPanel(); p.style.display=''; } else p.style.display='none';
+};
+
+// --- 새로고침: 전체 리로드 대신 데이터만 갱신 + 보던 화면(월/날짜/필터) 유지 ---
+async function refresh(){
+  try{
+    await loadCats();
+    const r=await fetch('/api/transactions?limit=2000');
+    if(!r.ok) return;
+    ALL=(await r.json()).rows.filter(t=>dkey(t));
+    buildNav();
+    const sd=selDay;
+    if(curY&&curM){ select(curY,curM); if(sd) showDay(sd); }
+    else { const latest=ALL.map(dkey).sort().reverse()[0]; if(latest){ const[y,m]=latest.split('-'); select(+y,+m); } }
+  }catch(e){}
+}
+const refreshBtn=document.getElementById('refreshBtn');
+refreshBtn.onclick=async()=>{ refreshBtn.classList.add('spinning'); await refresh(); setTimeout(()=>refreshBtn.classList.remove('spinning'),400); };
+
+// 당겨서 새로고침 (홈 화면 웹앱/standalone 대응)
+(function(){
+  const ptr=document.getElementById('ptr'); const TH=70;
+  let y0=null, dist=0, active=false;
+  const reset=()=>{ y0=null; dist=0; active=false; ptr.className=''; ptr.style.transform=''; };
+  addEventListener('touchstart',e=>{ if(window.scrollY<=0 && e.touches.length===1){ y0=e.touches[0].clientY; active=true; dist=0; } },{passive:true});
+  addEventListener('touchmove',e=>{
+    if(!active||y0==null) return;
+    const dy=e.touches[0].clientY-y0;
+    if(dy>0 && window.scrollY<=0){
+      e.preventDefault();
+      dist=Math.min(dy*0.5,92);
+      ptr.classList.add('show');
+      ptr.classList.toggle('ready', dist>=TH);
+      ptr.style.transform=`translateY(${dist-48}px)`;
+    } else if(dist===0){ active=false; }
+  },{passive:false});
+  addEventListener('touchend',async()=>{
+    if(!active){ return; }
+    if(dist>=TH){ ptr.classList.remove('ready'); ptr.classList.add('show','spinning'); ptr.style.transform='translateY(14px)'; await refresh(); }
+    reset();
+  },{passive:true});
+})();
+
+// ===== 분석 뷰 =====
+let viewMode='cal', statPeriod='thismonth';
+const PALETTE=['#5b8cff','#5fd28a','#ff6b81','#ffb454','#c084fc','#38bdf8','#f472b6','#a3e635','#fbbf24','#22d3ee','#fb7185','#facc15'];
+function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0; return h; }
+function catColor(name){ if(!name||name==='미분류') return '#6b7280'; const i=CATS.indexOf(name); return PALETTE[(i>=0?i:hashStr(name))%PALETTE.length]; }
+function deltaPct(cur,prev){
+  if(!prev) return {txt:'',cls:'flat'};
+  const r=Math.round((cur-prev)/prev*100);
+  if(r===0) return {txt:'0%',cls:'flat'};
+  return {txt:(r>0?'▲':'▼')+Math.abs(r)+'%', cls:r>0?'up':'down'};
+}
+function ymd(y,m,d){ return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+function periodRange(key){
+  const now=new Date(), y=now.getFullYear(), m=now.getMonth()+1;
+  const lastDay=(yy,mm)=>new Date(yy,mm,0).getDate();
+  const monthR=(yy,mm)=>({from:ymd(yy,mm,1),to:ymd(yy,mm,lastDay(yy,mm))});
+  const shift=(yy,mm,d)=>{ const x=new Date(yy,mm-1+d,1); return [x.getFullYear(),x.getMonth()+1]; };
+  if(key==='thismonth'){ const c=monthR(y,m), [py,pm]=shift(y,m,-1), p=monthR(py,pm);
+    return {...c,prevFrom:p.from,prevTo:p.to,label:`${y}년 ${m}월`,prevLabel:'전월'}; }
+  if(key==='lastmonth'){ const [ly,lm]=shift(y,m,-1), c=monthR(ly,lm), [py,pm]=shift(ly,lm,-1), p=monthR(py,pm);
+    return {...c,prevFrom:p.from,prevTo:p.to,label:`${ly}년 ${lm}월`,prevLabel:'전월'}; }
+  if(key==='3months'){ const [sy,sm]=shift(y,m,-2), from=ymd(sy,sm,1), to=monthR(y,m).to;
+    const [psy,psm]=shift(y,m,-5), pf=ymd(psy,psm,1), [pey,pem]=shift(y,m,-3), pt=monthR(pey,pem).to;
+    return {from,to,prevFrom:pf,prevTo:pt,label:'최근 3개월',prevLabel:'직전 3개월'}; }
+  return {from:ymd(y,1,1),to:ymd(y,12,31),prevFrom:ymd(y-1,1,1),prevTo:ymd(y-1,12,31),label:`${y}년`,prevLabel:'작년'};
+}
+function aggCat(rows){ const m={}; rows.forEach(t=>{ if(!inStat(t)||!isSpend(t)) return; const c=t.category||'미분류'; m[c]=(m[c]||0)+eff(t); }); return m; }
+// 고정/비정기/변동 합계. 거래 카테고리 → 카테고리 그룹(CATGRP) 매핑. 미지정/미분류는 변동.
+function aggGroup(rows){ const m={fixed:0,irregular:0,variable:0};
+  rows.forEach(t=>{ if(!inStat(t)||!isSpend(t)) return; const g=CATGRP[t.category]||'variable'; m[g]+=eff(t); }); return m; }
+
+const PERIODS=[['thismonth','이번달'],['lastmonth','지난달'],['3months','최근 3개월'],['year','올해']];
+function buildPeriods(){
+  document.getElementById('periods').innerHTML=PERIODS.map(([k,l])=>
+    `<button type="button" class="pchip${statPeriod===k?' on':''}" data-p="${k}">${l}</button>`).join('');
+  document.querySelectorAll('.pchip').forEach(b=>b.onclick=()=>{ statPeriod=b.dataset.p; renderStat(); });
+}
+
+function renderStat(){
+  buildPeriods();
+  const R=periodRange(statPeriod);
+  const inRange=(t,f,tt)=>{ const k=dkey(t); return k>=f && k<=tt; };
+  const rows=ALL.filter(t=>inRange(t,R.from,R.to));
+  const prevRows=ALL.filter(t=>inRange(t,R.prevFrom,R.prevTo));
+  const agg=aggCat(rows), prevAgg=aggCat(prevRows);
+  const total=Object.values(agg).reduce((a,b)=>a+b,0);
+  const prevTotal=Object.values(prevAgg).reduce((a,b)=>a+b,0);
+  document.getElementById('statTitle').textContent=R.label;
+  const dTot=deltaPct(total,prevTotal);
+  document.getElementById('statSum').innerHTML=
+    `<div class="chip">지출<b style="color:var(--out)">${WON(total)}</b></div>`+
+    (prevTotal?`<div class="chip">${R.prevLabel} 대비<b class="delta ${dTot.cls}">${dTot.txt||'0%'}</b></div>`:'');
+  const body=document.getElementById('statBody');
+  if(!total){ body.innerHTML='<div class="stat-empty">이 기간 지출이 없어요.</div>'; return; }
+
+  const segs=Object.entries(agg).map(([cat,sum])=>({cat,sum,frac:sum/total,color:catColor(cat)}))
+    .sort((a,b)=>b.sum-a.sum);
+  const r=80, C=2*Math.PI*r; let off=0;
+  const rings=segs.map(s=>{ const len=C*s.frac;
+    const el=`<circle class="ring" data-cat="${esc(s.cat)}" r="${r}" cx="100" cy="100" stroke="${s.color}" stroke-width="22" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"/>`;
+    off+=len; return el; }).join('');
+  const cnt=rows.filter(t=>inStat(t)&&isSpend(t)).length;
+  const donut=`<div class="donut"><svg viewBox="0 0 200 200">${rings}</svg>
+    <div class="donut-center"><span class="dc-label">총지출</span><span class="dc-total">${WON(total)}</span>
+    <span class="dc-sub">${cnt}건 · ${segs.length}개 분류</span></div></div>`;
+  const legend=`<div class="legend">`+segs.map(s=>{ const d=deltaPct(s.sum,prevAgg[s.cat]||0);
+    return `<div class="leg" data-cat="${esc(s.cat)}"><span class="leg-dot" style="background:${s.color}"></span>
+      <span class="leg-name">${esc(s.cat)}</span><span class="leg-pct">${(s.frac*100).toFixed(0)}%</span>
+      <span class="leg-amt">${WON(s.sum)}${d.txt?`<span class="delta ${d.cls}">${d.txt}</span>`:''}</span></div>`;
+  }).join('')+`</div>`;
+
+  const mm={}; rows.forEach(t=>{ if(!inStat(t)||!isSpend(t)) return; const k=t.merchant||'(미상)'; mm[k]=(mm[k]||0)+eff(t); });
+  const tops=Object.entries(mm).sort((a,b)=>b[1]-a[1]).slice(0,5); const maxM=tops.length?tops[0][1]:1;
+  const topHtml=tops.map(([name,sum],i)=>
+    `<div class="rank"><span class="rank-no">${i+1}</span><span class="rank-name">${esc(name)}</span>
+     <span class="rank-bar"><i style="width:${(sum/maxM*100).toFixed(0)}%"></i></span>
+     <span class="rank-amt">${WON(sum)}</span></div>`).join('');
+
+  // 고정/비정기/변동 그룹 막대
+  const gAgg=aggGroup(rows), gTot=gAgg.fixed+gAgg.irregular+gAgg.variable;
+  const groupBar = gTot ? `<div class="gbar-wrap"><div class="gbar">`+
+    GROUPS.map(([k])=>{ const v=gAgg[k]; return v?`<div class="gseg ${k}" style="width:${(v/gTot*100).toFixed(2)}%"></div>`:''; }).join('')+
+    `</div><div class="gleg">`+GROUPS.map(([k,l])=>
+      `<span class="gleg-i"><span class="gdot ${k}"></span>${l} <b>${WON(gAgg[k])}</b> <span class="gpct">${Math.round(gAgg[k]/gTot*100)}%</span></span>`).join('')+
+    `</div></div>` : '';
+
+  body.innerHTML=groupBar+`<div class="stat-grid"><div class="donut-card">${donut}</div>${legend}</div>
+    <div class="stat-sec-h">소비 Top 5</div>${topHtml}<div class="drill" id="drill"></div>`;
+  bindStatHover();
+}
+
+function bindStatHover(){
+  const rings=[...document.querySelectorAll('.donut .ring')];
+  const legs=[...document.querySelectorAll('.leg')];
+  const hi=cat=>{ rings.forEach(r=>{ const on=r.dataset.cat===cat; r.classList.toggle('hi',!!cat&&on); r.classList.toggle('dim',!!cat&&!on); });
+    legs.forEach(l=>l.classList.toggle('dim',!!cat&&l.dataset.cat!==cat)); };
+  rings.concat(legs).forEach(el=>{
+    el.addEventListener('mouseenter',()=>hi(el.dataset.cat));
+    el.addEventListener('mouseleave',()=>hi(null));
+    el.addEventListener('click',()=>drillCat(el.dataset.cat));
+  });
+}
+function drillCat(cat){
+  const R=periodRange(statPeriod);
+  const rows=ALL.filter(t=>{ const k=dkey(t); return k>=R.from&&k<=R.to&&inStat(t)&&isSpend(t)&&(t.category||'미분류')===cat; })
+    .sort((a,b)=>(b.occurred_at||'').localeCompare(a.occurred_at||''));
+  const d=document.getElementById('drill'); if(!d) return;
+  const tot=rows.reduce((a,t)=>a+eff(t),0);
+  d.innerHTML=`<h3><span class="leg-dot" style="background:${catColor(cat)}"></span>${esc(cat)} · ${WON(tot)} · ${rows.length}건
+    <span class="close" id="drillClose">닫기</span></h3>`+
+    rows.map(t=>`<div class="tx"><div class="tx-top"><span class="merchant">${esc(t.merchant)||'(미상)'}</span>
+      <span class="amount out">−${WON(eff(t))}</span></div>
+      <div class="meta"><span class="tag">${t.source||'?'}</span><span>${(t.occurred_at||dkey(t)).slice(5,16).replace('T',' ')}</span>
+      ${t.memo?`<span>${esc(t.memo)}</span>`:''}</div></div>`).join('');
+  document.getElementById('drillClose').onclick=()=>{ d.innerHTML=''; };
+  d.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// 탭 전환
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+  viewMode=b.dataset.v;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('calView').style.display = viewMode==='cal'?'':'none';
+  document.getElementById('statView').style.display = viewMode==='stat'?'':'none';
+  if(viewMode==='stat') renderStat();
+});
+
+load().then(()=>{
+  // 딥링크: /?view=stat 이면 분석 탭으로 바로 진입
+  if(new URLSearchParams(location.search).get('view')==='stat')
+    document.querySelector('.tab[data-v="stat"]')?.click();
+});
+</script>
+</body>
+</html>

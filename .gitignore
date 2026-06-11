@@ -1,0 +1,24 @@
+# 시크릿 — 절대 커밋 금지
+server/.webhook_token
+server/.web_password
+
+# 개인 금융 데이터 (SQLite 본체·WAL·백업)
+server/spending.db
+server/spending.db-shm
+server/spending.db-wal
+server/spending.db.bak-*
+*.db
+*.db-shm
+*.db-wal
+
+# 로그 (거래 내역·전화번호 등 개인정보 포함)
+server/server.log
+server/server.err.log
+*.log
+
+# 세션 핸드오프 문서 (실토큰·내부 IP·개인정보 포함 — 로컬 전용)
+HANDOFF.md
+
+# 의존성·OS 부산물
+node_modules/
+.DS_Store
