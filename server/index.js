@@ -8,6 +8,7 @@ import Database from 'better-sqlite3';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHmac } from 'node:crypto';
 import { parseSms } from './parse.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -15,6 +16,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const TOKEN = readFileSync(join(DATA_DIR, '.webhook_token'), 'utf8').trim();
 const WEBPASS = readFileSync(join(DATA_DIR, '.web_password'), 'utf8').trim();
+// 웹 UI 세션 쿠키 토큰. 비밀번호에서 파생 → 비번 변경 시 기존 세션 자동 무효화.
+const SESSION_TOKEN = createHmac('sha256', WEBPASS).update('spending-session-v1').digest('hex');
 const BIND = process.env.BIND_ADDR || '127.0.0.1'; // 실바인딩 주소는 launchd plist의 BIND_ADDR로 주입 (사설망 IP만 사용할 것)
 const PORT = process.env.PORT || 8080;
 
@@ -78,12 +81,25 @@ function tokenAuth(req, res, next) {
 }
 // 웹 UI/API 인증: Tailscale 사설망 전용 바인딩이라 추가 비번 없음(사용자 결정 2026-06-08).
 // 되돌리려면 아래 no-op을 지우고 주석 처리된 Basic Auth 로직을 복원하면 됨.
+function parseCookies(req) {
+  const out = {};
+  (req.headers.cookie || '').split(';').forEach(c => {
+    const i = c.indexOf('=');
+    if (i > 0) out[c.slice(0, i).trim()] = c.slice(i + 1).trim();
+  });
+  return out;
+}
+// 웹 UI/조회 API 인증. 세션 쿠키 우선(웹앱·브라우저 공통, 1년 유지),
+// Basic Auth는 curl·스크립트 호환용 폴백. 미인증 시 API는 401, 페이지는 /login.
 function webAuth(req, res, next) {
+  if (parseCookies(req).sess === SESSION_TOKEN) return next();
   const h = req.get('Authorization') || '';
-  const b64 = h.startsWith('Basic ') ? h.slice(6) : '';
-  const pass = Buffer.from(b64, 'base64').toString('utf8').split(':')[1];
-  if (pass === WEBPASS) return next();
-  res.set('WWW-Authenticate', 'Basic realm="spending"').status(401).send('인증 필요');
+  if (h.startsWith('Basic ')) {
+    const pass = Buffer.from(h.slice(6), 'base64').toString('utf8').split(':')[1];
+    if (pass === WEBPASS) return next();
+  }
+  if (req.path.startsWith('/api/')) return res.status(401).json({ ok: false, error: 'auth required' });
+  res.redirect('/login');
 }
 
 app.get('/health', (_req, res) => {
@@ -176,7 +192,37 @@ app.delete('/api/categories/:name', webAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// 정적 UI (Basic Auth 보호)
+// 로그인 (쿠키 세션 발급) — 웹앱(PWA)에서 매번 인증 안 뜨게.
+app.get('/login', (_req, res) => {
+  res.type('html').send(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>로그인</title><style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#111;color:#eee;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+form{background:#1c1c1e;padding:28px 24px;border-radius:14px;width:min(320px,86vw);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+h1{font-size:18px;margin:0 0 18px;text-align:center}
+input{width:100%;box-sizing:border-box;padding:13px;margin:6px 0;border:1px solid #333;border-radius:9px;background:#000;color:#eee;font-size:16px}
+button{width:100%;padding:13px;margin-top:10px;border:0;border-radius:9px;background:#0a84ff;color:#fff;font-size:16px;font-weight:600}
+</style></head><body><form method="POST" action="/login">
+<h1>소비 관리</h1>
+<input type="password" name="password" placeholder="비밀번호" autofocus autocomplete="current-password">
+<button>로그인</button>
+</form></body></html>`);
+});
+app.post('/login', (req, res) => {
+  if (req.body && req.body.password === WEBPASS) {
+    res.setHeader('Set-Cookie', `sess=${SESSION_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 365}`);
+    return res.redirect('/');
+  }
+  res.redirect('/login');
+});
+
+// 홈화면 아이콘·파비콘은 인증 없이 공개 (OS·브라우저가 미인증 상태에서도 가져갈 수 있게)
+const ICON_RE = /^\/(icon-full|favicon|favicon-\d+)\.(png|ico)$/;
+app.use((req, res, next) =>
+  ICON_RE.test(req.path) ? express.static(join(__dirname, 'public'))(req, res, next) : next()
+);
+
+// 정적 UI (세션 쿠키 보호)
 app.use('/', webAuth, express.static(join(__dirname, 'public')));
 
 app.listen(PORT, BIND, () => {
