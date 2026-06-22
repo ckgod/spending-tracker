@@ -11,12 +11,14 @@ import { fileURLToPath } from 'node:url';
 import { parseSms } from './parse.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const TOKEN = readFileSync(join(__dirname, '.webhook_token'), 'utf8').trim();
-const WEBPASS = readFileSync(join(__dirname, '.web_password'), 'utf8').trim();
+// 데이터·시크릿 경로. 기본은 코드와 같은 위치(맥서버·로컬 그대로), 도커에선 DATA_DIR로 볼륨 분리.
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const TOKEN = readFileSync(join(DATA_DIR, '.webhook_token'), 'utf8').trim();
+const WEBPASS = readFileSync(join(DATA_DIR, '.web_password'), 'utf8').trim();
 const BIND = process.env.BIND_ADDR || '127.0.0.1'; // 실바인딩 주소는 launchd plist의 BIND_ADDR로 주입 (사설망 IP만 사용할 것)
 const PORT = process.env.PORT || 8080;
 
-const db = new Database(join(__dirname, 'spending.db'));
+const db = new Database(join(DATA_DIR, 'spending.db'));
 db.pragma('journal_mode = WAL');
 db.exec(`
 CREATE TABLE IF NOT EXISTS transactions (
@@ -76,8 +78,7 @@ function tokenAuth(req, res, next) {
 }
 // 웹 UI/API 인증: Tailscale 사설망 전용 바인딩이라 추가 비번 없음(사용자 결정 2026-06-08).
 // 되돌리려면 아래 no-op을 지우고 주석 처리된 Basic Auth 로직을 복원하면 됨.
-function webAuth(req, res, next) { return next(); }
-function webAuthBasic(req, res, next) {
+function webAuth(req, res, next) {
   const h = req.get('Authorization') || '';
   const b64 = h.startsWith('Basic ') ? h.slice(6) : '';
   const pass = Buffer.from(b64, 'base64').toString('utf8').split(':')[1];

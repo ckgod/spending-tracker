@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+# 시크릿·금융데이터는 이미지에 굽지 않음 (볼륨 /data로만 주입)
+server/.webhook_token
+server/.web_password
+*.db
+*.db-shm
+*.db-wal
+*.db.bak-*
+*.log
+.git
+.gitignore
+.DS_Store
+HANDOFF.md
+docs
+data

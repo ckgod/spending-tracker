@@ -1,0 +1,35 @@
+services:
+  spending:
+    build: .
+    image: spending-tracker:latest
+    container_name: spending-tracker
+    restart: always
+    expose:
+      - "8080"             # 내부 전용. 외부 노출은 Caddy(HTTPS)를 통해서만.
+    volumes:
+      - ./data:/data       # spending.db(+WAL/shm)·.webhook_token·.web_password 영속
+    environment:
+      - DATA_DIR=/data
+      - BIND_ADDR=0.0.0.0
+      - PORT=8080
+      - TZ=Asia/Seoul
+    mem_limit: 200m        # idle 워크로드. 폭주 방지용 상한(컨테이너 한정)
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: always
+    ports:
+      - "80:80"            # Let's Encrypt HTTP-01 챌린지 + HTTP→HTTPS 리다이렉트
+      - "443:443"          # HTTPS
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data   # 발급된 인증서 영속
+      - caddy_config:/config
+    depends_on:
+      - spending
+    mem_limit: 100m
+
+volumes:
+  caddy_data:
+  caddy_config:

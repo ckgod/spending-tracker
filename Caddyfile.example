@@ -1,0 +1,7 @@
+# Caddy 리버스 프록시 — 자동 HTTPS(Let's Encrypt).
+# 이 파일을 Caddyfile로 복사하고 도메인을 본인 것으로 바꾼다.
+#   cp Caddyfile.example Caddyfile
+# 무료 도메인이 없으면 DuckDNS(https://www.duckdns.org) 서브도메인을 쓰면 된다.
+your-subdomain.example.com {
+	reverse_proxy spending:8080
+}

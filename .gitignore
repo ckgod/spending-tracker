@@ -19,6 +19,12 @@ server/server.err.log
 # 세션 핸드오프 문서 (실토큰·내부 IP·개인정보 포함 — 로컬 전용)
 HANDOFF.md
 
+# 실제 도메인이 박힌 Caddy 설정 (배포처 노출 방지). 템플릿은 Caddyfile.example 사용.
+Caddyfile
+
+# 배포 시 컨테이너 볼륨(시크릿·DB가 들어가는 곳)
+data/
+
 # 의존성·OS 부산물
 node_modules/
 .DS_Store
