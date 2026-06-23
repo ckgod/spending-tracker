@@ -65,8 +65,11 @@ const VALID_GROUPS = ['fixed','irregular','variable'];
 }
 
 const insert = db.prepare(`INSERT INTO transactions
-  (source,type,amount,merchant,balance,occurred_at,received_at,parsed_ok,raw,sender)
-  VALUES (@source,@type,@amount,@merchant,@balance,@occurred_at,@received_at,@parsed_ok,@raw,@sender)`);
+  (source,type,amount,merchant,balance,occurred_at,received_at,parsed_ok,raw,sender,excluded)
+  VALUES (@source,@type,@amount,@merchant,@balance,@occurred_at,@received_at,@parsed_ok,@raw,@sender,@excluded)`);
+
+// 중복 webhook 흡수용: 같은 raw가 최근 시각(since) 이후 들어왔는지 조회
+const dupCheck = db.prepare(`SELECT id FROM transactions WHERE raw=@raw AND received_at>=@since ORDER BY id DESC LIMIT 1`);
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
@@ -122,12 +125,20 @@ app.post('/sms', tokenAuth, (req, res) => {
     console.log(`[skip] 비거래 무시: ${text.slice(0, 50).replace(/\n/g,' ')}`);
     return res.json({ ok: true, ignored: true, reason: 'not a transaction sms' });
   }
+  // 중복 방지: 동일 raw가 최근 10분 내 이미 저장됐으면 무시(단축어 재전송·수동 중복 흡수).
+  // 결제 SMS raw엔 시각/잔액이 포함돼 서로 다른 거래는 raw가 달라짐 → 정상거래 오탐 거의 없음.
+  const dup = dupCheck.get({ raw: text, since: new Date(Date.now() - 10 * 60 * 1000).toISOString() });
+  if (dup) {
+    console.log(`[dup] 중복 무시 (#${dup.id}와 동일): ${text.slice(0, 40).replace(/\n/g,' ')}`);
+    return res.json({ ok: true, ignored: true, reason: 'duplicate', dupOf: dup.id });
+  }
   const info = insert.run({
     source: p.source, type: p.type, amount: p.amount, merchant: p.merchant,
     balance: p.balance, occurred_at: p.occurredAt, received_at: new Date().toISOString(),
     parsed_ok: p.parsedOk ? 1 : 0, raw: text, sender,
+    excluded: p.isCardSettlement ? 1 : 0, // 카드대금 정산은 자동 통계제외(수입 이중계산 방지)
   });
-  console.log(`[sms] #${info.lastInsertRowid} ${p.source} ${p.type} ${p.amount}원 ${p.merchant||''}`);
+  console.log(`[sms] #${info.lastInsertRowid} ${p.source} ${p.type} ${p.amount}원 ${p.merchant||''}${p.isCardSettlement ? ' [카드대금→통계제외]' : ''}`);
   res.json({ ok: true, id: info.lastInsertRowid, parsed: p });
 });
 

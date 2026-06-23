@@ -112,6 +112,7 @@ export function parseSms(text) {
   const amount = won(t);
   const type = detectType(t);
   let source = detectSource(t);
+  const sourceKind = source; // 카드명 치환 전 원본 출처(현대카드/카뱅체크카드/카뱅계좌)
   const balance = detectBalance(t);
   const occurredAt = detectOccurredAt(t);
   let merchant;
@@ -122,6 +123,13 @@ export function parseSms(text) {
   } else {
     merchant = detectMerchant(t, amount);
   }
+  // 카드사(현대카드/스마일카드)로 분류된 입금/출금 = 카드대금 정산.
+  //  - 입금: 카드사측 "…입금되었습니다" 알림
+  //  - 출금: 카뱅 계좌에서 카드대금 자동납부(적요에 카드명 → detectSource가 '현대카드'로 분류)
+  // 개별 승인건이 이미 지출로 집계돼 있어 이 정산건까지 합산하면 이중계산 → 통계제외 대상.
+  // (현대카드 '승인'=실제 지출은 type이 '승인'이라 여기 안 걸림. 카뱅계좌 일반 출금도 sourceKind가 달라 제외 안 됨.)
+  const isCardSettlement = sourceKind === '현대카드' && (type === '입금' || type === '출금');
+  if (isCardSettlement) merchant = type === '입금' ? '카드대금 정산(입금)' : '카드대금 정산(출금)';
   const parsedOk = !!(amount && source); // 금액+출처는 잡혔는가
-  return { amount, type, source, balance, occurredAt, merchant, parsedOk };
+  return { amount, type, source, balance, occurredAt, merchant, parsedOk, isCardSettlement };
 }
