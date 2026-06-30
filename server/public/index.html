@@ -287,10 +287,8 @@ async function load(){
   if(!r.ok){ document.getElementById('cal').textContent='불러오기 실패'; return; }
   ALL = (await r.json()).rows.filter(t=>dkey(t));
   buildNav();
-  // 최신 월 자동 선택
-  const latest = ALL.map(dkey).sort().reverse()[0];
-  if(latest){ const [y,m]=latest.split('-'); select(+y,+m); }
-  else { document.getElementById('cal').innerHTML='<div class="hint">아직 거래가 없습니다.</div>'; }
+  // 현재 월을 기본 선택(아직 거래가 없는 달 — 예: 월초 — 이어도 달력 표시)
+  const now=new Date(); select(now.getFullYear(), now.getMonth()+1);
 }
 
 function buildNav(){
@@ -298,6 +296,9 @@ function buildNav(){
   const map = {}; // y -> m -> spend
   ALL.forEach(t=>{ const k=dkey(t); const y=+k.slice(0,4), m=+k.slice(5,7);
     (map[y]=map[y]||{}); map[y][m]=(map[y][m]||0)+((inStat(t)&&isSpend(t))?eff(t):0); });
+  // 현재 월은 거래가 없어도 사이드바에 항상 노출(월초 빈 달 대응)
+  const now=new Date(), cy=now.getFullYear(), cm=now.getMonth()+1;
+  (map[cy]=map[cy]||{}); if(map[cy][cm]===undefined) map[cy][cm]=0;
   const nav = document.getElementById('nav'); nav.innerHTML='';
   Object.keys(map).map(Number).sort((a,b)=>b-a).forEach(y=>{
     const yTot = Object.values(map[y]).reduce((a,b)=>a+b,0);
